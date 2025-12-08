@@ -14,7 +14,6 @@
 
 #include "usb_defines.h"
 
-//Taken from http://www.usbmadesimple.co.uk/ums_ms_desc_dev.htm
 static const uint8_t device_descriptor[] = {
 	18, //Length
 	1,  //Type (Device)
@@ -23,8 +22,8 @@ static const uint8_t device_descriptor[] = {
 	0x0, //Device Subclass
 	0x0, //Device Protocol  (000 = use config descriptor)
 	64, //Max packet size for EP0
-	0x34, 0x12, //ID Vendor
-	0x01, 0x00, //ID Product
+	0x09, 0x12, //ID Vendor
+	0x05, 0x23, //ID Product
 	0x03, 0x00, //ID Rev
 	1, //Manufacturer string
 	2, //Product string
