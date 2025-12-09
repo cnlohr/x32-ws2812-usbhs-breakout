@@ -443,7 +443,6 @@ int main()
 	RCC->APB2PRSTR = 0;
 	RCC->APB1PRSTR = 0;
 
-
 	// Timer 1 setup.
 	TIM1->PSC = 0x0000;                      // Prescaler 
 	TIM1->ATRLR = TRIG_FULLCYCLE;
