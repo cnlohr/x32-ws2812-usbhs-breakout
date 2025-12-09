@@ -11,7 +11,7 @@
 #define USB_VENDOR_ID  0x1209
 #define USB_PRODUCT_ID 0x2305
 
-#define NR_LEDS_PER_STRAND     301
+#define NR_LEDS_PER_STRAND     215
 #define block_size             512
 #define STRANDS                32
 
