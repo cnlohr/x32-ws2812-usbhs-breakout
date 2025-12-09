@@ -11,23 +11,28 @@
 #define USB_VENDOR_ID  0x1209
 #define USB_PRODUCT_ID 0x2305
 
-#define NR_LEDS_PER_STRAND     (215)
-#define block_size             512
-#define STRANDS                32
+#define NR_LEDS_PER_STRAND	 (215)
+#define block_size			 512
+#define STRANDS				32
 
 #define USB_TIMEOUT 1024
 #define TRANSFERS 8
+#define DEVICES 2
 
-uint8_t buffers[TRANSFERS][block_size];
+
+const char * serials[DEVICES] = { "f38dabcd5b6ebc14", "d3f9abcd3bdabc14" };
+
+uint8_t buffers[DEVICES][TRANSFERS][block_size];
 static libusb_context *ctx = NULL;
-static libusb_device_handle *handle;
+static libusb_device_handle * handles[DEVICES];
 int abortLoop = 0;
 int xfertotal = 0;
 int triggers = 0;
 int done_frame = 0;
 int frame_num;
 
-uint32_t LEDs[NR_LEDS_PER_STRAND][STRANDS];
+uint32_t LEDs[DEVICES][NR_LEDS_PER_STRAND][STRANDS];
+int configured[DEVICES];
 
 static void sighandler(int signum)
 {
@@ -53,39 +58,43 @@ static inline int hue2( const int n )
 
 static inline void UpdateLEDs()
 {
-	static uint32_t phases[NR_LEDS_PER_STRAND][STRANDS];
+	static uint32_t phases[DEVICES][NR_LEDS_PER_STRAND][STRANDS];
 
+	int d;
 	int l;
 	int s;
 
 	srand( 0 );
-	for( s = 0; s < 32; s++ )
+	for( d = 0; d < DEVICES; d++ )
 	{
-		for( l = 0; l < NR_LEDS_PER_STRAND; l++ )
+		for( s = 0; s < 32; s++ )
 		{
-			int ph = phases[l][s] += (rand()%1024)+512;
+			for( l = 0; l < NR_LEDS_PER_STRAND; l++ )
+			{
+				int ph = phases[d][l][s] += (rand()%1024)+512;
 
-			ph = (ph>>10) & 0xff;
+				ph = (ph>>10) & 0xff;
 
-			//LEDs[l][s] = EHSVtoHEX( ph, 255, 64 );
+				//LEDs[l][s] = EHSVtoHEX( ph, 255, 64 );
 
-			uint32_t rgb = 0;
-			int r = hue2((ph + 0)&0xff);
-			int g = hue2((ph + 85)&0xff);
-			int b = hue2((ph + 171)&0xff);
+				uint32_t rgb = 0;
+				int r = hue2((ph + 0)&0xff);
+				int g = hue2((ph + 85)&0xff);
+				int b = hue2((ph + 171)&0xff);
 
-			r-=128;
-			g-=128;
-			b-=128;
+				r-=128;
+				g-=128;
+				b-=128;
 
-			if( r < 0 ) r = 0;
-			if( g < 0 ) g = 0;
-			if( b < 0 ) b = 0;
-			if( r > 255 ) r = 255;
-			if( g > 255 ) g = 255;
-			if( b > 255 ) b = 255;
+				if( r < 0 ) r = 0;
+				if( g < 0 ) g = 0;
+				if( b < 0 ) b = 0;
+				if( r > 255 ) r = 255;
+				if( g > 255 ) g = 255;
+				if( b > 255 ) b = 255;
 
-			LEDs[l][s] = r | (g<<8) | (b<<16);
+				LEDs[d][l][s] = r | (g<<8) | (b<<16);
+			}
 		}
 	}
 }
@@ -93,16 +102,30 @@ static inline void UpdateLEDs()
 ////////////////////////////////////////////////////////////////////////
 // USB Callback
 ////////////////////////////////////////////////////////////////////////
-int USBCallbackFill( uint8_t * data )
+int USBCallbackFill( uint8_t * data, int device )
 {
-	static int ledstate;
+	if( !configured[device] )
+	{
+		configured[device] = 1;
+		uint16_t * d = (uint16_t*)data;
+		d[0] = 0xffff; // We are going to configure mode.
+		d[1] = 0xffff;
+		d[2] = 34*4+3;  // Period
+		d[3] = 0;     // One timing
+		d[4] = 12*4;  // Data timing
+		d[5] = 26*4;  // Zero timing
+		return 6*2;
+	}
+
+	static int ledstate[DEVICES];
+
 	const int leds_per_transfer = 5;
 	const int num_leds_per_string = NR_LEDS_PER_STRAND;
 
 	uint32_t * lb = (uint32_t*)data;
 
 	int terminal = 0;
-	int ledno = ledstate * leds_per_transfer;
+	int ledno = ledstate[device] * leds_per_transfer;
 	int ledremain = num_leds_per_string - ledno;
 	if( ledremain <= leds_per_transfer )
 	{
@@ -113,7 +136,7 @@ int USBCallbackFill( uint8_t * data )
 		ledremain = leds_per_transfer;
 	}
 
-	lb[0] = ((terminal?0x8000:0x0000) | ledstate*leds_per_transfer*24) | // Offset
+	lb[0] = ((terminal?0x8000:0x0000) | ledstate[device]*leds_per_transfer*24) | // Offset
 			( ledremain * 24 ) << 16;
 
 	uint32_t * lbo = lb+1;
@@ -122,9 +145,9 @@ int USBCallbackFill( uint8_t * data )
 	for( l = 0; l < leds_per_transfer; l++ )
 	{
 		int bit;
-		int ledid = leds_per_transfer * ledstate + l;
+		int ledid = leds_per_transfer * ledstate[device] + l;
 
-		uint32_t * ledrow = LEDs[ledid];
+		uint32_t * ledrow = LEDs[device][ledid];
 		for( bit = 0; bit < 24; bit++ )
 		{
 			uint32_t bitmask = 1<<(23-bit);
@@ -140,14 +163,12 @@ int USBCallbackFill( uint8_t * data )
 
 	if( terminal )
 	{
-		frame_num++;
-		ledstate = 0;
-		triggers++;
-		done_frame = 1;
+		ledstate[device] = 0;
+		done_frame |= 1<<device;
 	}
 	else
 	{
-		ledstate++;
+		ledstate[device]++;
 	}
 
 	return 512;
@@ -156,7 +177,7 @@ int USBCallbackFill( uint8_t * data )
 void xcallback (struct libusb_transfer *transfer)
 {
 	xfertotal += transfer->actual_length;
-	transfer->length = USBCallbackFill( transfer->buffer );
+	transfer->length = USBCallbackFill( transfer->buffer, (intptr_t)transfer->user_data );
 	libusb_submit_transfer( transfer );
 }
 
@@ -167,46 +188,103 @@ int main(int argc, char **argv)
 	signal(SIGINT, sighandler);
 
 	libusb_init(&ctx);
-	libusb_set_option(ctx, LIBUSB_OPTION_LOG_LEVEL, 3);
-
-	handle = libusb_open_device_with_vid_pid( ctx, USB_VENDOR_ID, USB_PRODUCT_ID );
-	if ( !handle )
-	{
-		fprintf( stderr, "Error: couldn't find handle\n" );
-		return 1;
-	}
-
-	libusb_detach_kernel_driver(handle, 3);
-
-	int r = 1;
-	r = libusb_claim_interface(handle, 3 );
-	if( r < 0 )
-	{
-		fprintf(stderr, "usb_claim_interface error %d\n", r);
-		return 2;
-	}
+	libusb_set_option(ctx, LIBUSB_OPTION_LOG_LEVEL, 0);
 
 	double dRecvTotalTime = 0;
 	double dSendTotalTime = 0;
 	double dLastPrint = OGGetAbsoluteTime();
 	int rtotal = 0, stotal = 0;
 
-	// Async (Fast, bulk)
-	// About 260-320 Mbit/s
+	struct libusb_transfer * transfers[DEVICES][TRANSFERS];
 
-	struct libusb_transfer * transfers[TRANSFERS];
-	int n;
-	for( n = 0; n < TRANSFERS; n++ )
+	struct libusb_device **devs;
+	int cnt = libusb_get_device_list(ctx, &devs);
+	if (cnt < 0)
 	{
-		int k;
-		for( k = 0; k < block_size; k++ )
+		fprintf( stderr, "Device enuemration issue.\n" );
+		return -1;
+	}
+	for ( int c = 0; c < cnt; c++ )
+	{
+		struct libusb_device_descriptor desc;
+		libusb_device_handle *thandle;
+		int r = libusb_get_device_descriptor(devs[c], &desc);
+		uint8_t sserial[64];
+
+		if( desc.idVendor != USB_VENDOR_ID || desc.idProduct != USB_PRODUCT_ID )
 		{
-			buffers[n][k] = k;
+			continue;
 		}
-		struct libusb_transfer * t = transfers[n] = libusb_alloc_transfer( 0 );
-		libusb_fill_bulk_transfer( t, handle, 0x05 /*Endpoint for send */, buffers[n], block_size, xcallback, (void*)(intptr_t)n, 1000 );
-		t->length = USBCallbackFill( t->buffer );
-		libusb_submit_transfer( t );
+
+		int err = libusb_open(devs[c], &thandle);
+		if( err )
+		{
+			fprintf( stderr, "Error opening device.  Did you forget to `make install_udev_rules`?\n" );
+			continue;
+		}
+
+		int captured = 0;
+
+		if( thandle )
+		{
+			if( libusb_get_string_descriptor_ascii( thandle, desc.iSerialNumber, sserial, 63 ) >= 0 )
+			{
+				sserial[63] = '\0';
+				fprintf( stderr, "Found serial: %s ", sserial );
+				int n;
+				for( n = 0; n < DEVICES; n++ )
+				{
+					if( strcmp( serials[n], sserial ) == 0 )
+					{
+						fprintf( stderr, "captured as %d\n", n );
+						captured = 1;
+						handles[n] = thandle;
+					}
+				}
+				if( !captured)
+				{
+					fprintf( stderr, "skipped\n" );
+				}
+			}
+		}
+		if( !captured )
+		{
+			libusb_close(thandle);
+		}
+	}
+	libusb_free_device_list(devs, 1);
+
+	int done_mask = 0;
+	int device = 0;
+	for( device = 0; device < DEVICES; device++ )
+	{
+		libusb_device_handle * handle = handles[device];
+		if( !handle )
+		{
+			fprintf( stderr, "Error: device with serial %s not found\n", serials[device] );
+			continue;
+		}
+
+		libusb_detach_kernel_driver(handle, 3);
+
+		int r = 1;
+		r = libusb_claim_interface(handle, 3 );
+		if( r < 0 )
+		{
+			fprintf(stderr, "usb_claim_interface error %d\n", r);
+			return 2;
+		}
+
+		int n;
+		for( n = 0; n < TRANSFERS; n++ )
+		{
+			struct libusb_transfer * t = transfers[device][n] = libusb_alloc_transfer( 0 );
+			libusb_fill_bulk_transfer( t, handle, 0x05 /*Endpoint for send */, buffers[device][n], block_size, xcallback, (void*)(intptr_t)n, 1000 );
+			t->user_data = (void*)(uintptr_t)device;
+			t->length = USBCallbackFill( t->buffer, device );
+			libusb_submit_transfer( t );
+		}
+		done_mask |= 1<<device;
 	}
 
 
@@ -226,22 +304,33 @@ int main(int argc, char **argv)
 			dLastPrint = dNow;
 		}
 
-		if( done_frame )
+		if( done_frame == done_mask )
 		{
-			UpdateLEDs();
-
+			frame_num++;
+			triggers++;
 			done_frame = 0;
+			UpdateLEDs();
 		}
 	}
 
-	for( n = 0; n < TRANSFERS; n++ )
+	for( device = 0; device < DEVICES; device++ )
 	{
-		libusb_cancel_transfer( transfers[n] );
-	 	libusb_free_transfer( transfers[n] );
+		int n;
+		for( n = 0; n < TRANSFERS; n++ )
+		{
+			if( transfers[device][n] )
+			{
+				libusb_cancel_transfer( transfers[device][n] );
+			 	libusb_free_transfer( transfers[device][n] );
+			}
+		}
+		if( handles[device] )
+		{
+			libusb_release_interface (handles[device], 0);
+			libusb_close(handles[device]);
+		}
 	}
 
-	libusb_release_interface (handle, 0);
-	libusb_close(handle);
 	libusb_exit(NULL);
 
 	return 0;

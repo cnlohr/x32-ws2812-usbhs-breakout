@@ -1,11 +1,7 @@
 all : testtop
 
-# to make CI happy.
-testtop.bulk.elf : testtop.c
-	gcc -o $@ $^ -I../../../minichlink -ludev -lusb-1.0
-
 testtop : testtop.c
-	gcc -o $@ $^ -I../../../minichlink -ludev -lusb-1.0
+	gcc -g -o $@ $^ -I../../../minichlink -ludev -lusb-1.0
 
 install_udev_rules : 
 	sudo cp 99-x32-ws2812-usbhs-breakout.rules /etc/udev/rules.d/
