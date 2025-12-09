@@ -5,6 +5,9 @@
 #include "hsusb_v30x.h"
 #include "hsusb_v30x.c" // Normally would be in ADDITIONAL_C_FILES, but the PIO build system doesn't currently understand that.
 
+
+struct usb_string_descriptor_struct_serial_16 string3;
+
 uint32_t count;
 int dummy = 1; // Dummy data being sent (no host)
 int streaming = 0;
@@ -15,10 +18,10 @@ volatile uint32_t memory_buffer[BUFFER_SIZE_WORDS] __attribute__((aligned(4)));
 
 #define HALF_BUFFER_BYTES (BUFFER_SIZE_WORDS*4/2)
 
-#define TRIG_FULLCYCLE 34*4                         // Minimum = 32 --> Selecting 33 or 34 -- sooooometimes 33 doesn't quiiiiite work, so let's go to 34.
+#define TRIG_FULLCYCLE 35*4+3                         // Minimum = 32 --> Selecting 33 or 34 -- sooooometimes 33 doesn't quiiiiite work, so let's go to 34.
 #define TRIG_INITIAL 0 
-#define TRIG_DATA 12*4                         // Minimum = 9
-#define TRIG_ZERO 24*4                        //  Minimum = 22
+#define TRIG_DATA 12*4                        // Minimum = 9
+#define TRIG_ZERO 26*4                        //  Minimum = 22
 
 
 int last = 0;
@@ -27,6 +30,16 @@ uint8_t scratchpad[2048] __attribute__((aligned(32)));
 
 void TriggerEnable( int nrsamps )
 {
+	TIM1->CTLR1 = 0;
+	TIM2->CTLR1 = 0;
+	TIM10->CTLR1 = 0;
+
+	
+	// Make sure lines are zeroed.
+	GPIOC->OUTDR = 0x0;
+	GPIOB->OUTDR = 0x0;
+	GPIOA->OUTDR &= 0xff00;
+
 	DMA1_Channel3->CNTR = nrsamps;
 	DMA1_Channel3->MADDR = (uint32_t)(memory_buffer);
 	DMA1_Channel3->PADDR = (uint32_t)&GPIOC->OUTDR;
@@ -42,10 +55,10 @@ void TriggerEnable( int nrsamps )
 		DMA_CFGR1_EN;                        // Enable
 
 
-	DMA1_Channel5->CNTR = nrsamps;
-	DMA1_Channel5->MADDR = ((uint32_t)memory_buffer)+HALF_BUFFER_BYTES;
-	DMA1_Channel5->PADDR = (uint32_t)&GPIOB->OUTDR;
-	DMA1_Channel5->CFGR = 
+	DMA1_Channel7->CNTR = nrsamps;
+	DMA1_Channel7->MADDR = ((uint32_t)memory_buffer)+HALF_BUFFER_BYTES;
+	DMA1_Channel7->PADDR = (uint32_t)&GPIOB->OUTDR;
+	DMA1_Channel7->CFGR = 
 		DMA_CFGR1_DIR |                      // MEM2PERIPHERAL
 		DMA_CFGR1_PL |                       // High priority.
 		DMA_CFGR1_MSIZE_0 |                  // 16-bit memory
@@ -57,31 +70,34 @@ void TriggerEnable( int nrsamps )
 		DMA_CFGR1_EN;                        // Enable
 
 
-	DMA2_Channel8->CNTR = nrsamps;
-	DMA2_Channel8->MADDR = ((uint32_t)memory_buffer)+HALF_BUFFER_BYTES;
-	DMA2_Channel8->PADDR = (uint32_t)&GPIOA->OUTDR;
-	DMA2_Channel8->CFGR = 
+	DMA2_Channel10->CNTR = nrsamps;
+	DMA2_Channel10->MADDR = ((uint32_t)memory_buffer)+HALF_BUFFER_BYTES;
+	DMA2_Channel10->PADDR = (uint32_t)&GPIOA->OUTDR;
+	DMA2_Channel10->CFGR = 
 		DMA_CFGR1_DIR |                      // MEM2PERIPHERAL
 		DMA_CFGR1_PL |                       // High priority.
 		DMA_CFGR1_MSIZE_0 |                  // 16-bit memory
-		0              |                  // 8-bit peripheral
+		0              |                     // 8-bit peripheral
 		DMA_CFGR1_MINC |                     // Increase memory.
 		0 |                     // Circular mode.
 		//DMA_CFGR1_HTIE |                     // Half-trigger
 		//DMA_CFGR1_TCIE |                     // Whole-trigger
 		DMA_CFGR1_EN;                        // Enable
 
-	// The LED lines need a little longer for the first bit.
-	GPIOC->OUTDR = 0xffff;
-	GPIOB->OUTDR = 0xffff;
-	GPIOA->OUTDR |= 0xff;
 
-	// Stagger timer controls.
+
+	// The LED lines need a little longer for the first bit.
 	TIM1->CNT = 0;
+	GPIOC->OUTDR = 0xffff;
+	// Stagger timer controls.
 	TIM1->CTLR1 = TIM_CEN;
+
 	TIM2->CNT = 0;
+	GPIOB->OUTDR = 0xffff;
 	TIM2->CTLR1 = TIM_CEN;
+
 	TIM10->CNT = 0;
+	GPIOA->OUTDR |= 0xff;
 	TIM10->CTLR1 = TIM_CEN;
 
 	streaming = 1;
@@ -157,43 +173,66 @@ void HandleGotEPComplete( struct _USBState * ctx, int ep )
 		int offset = sp[0] & 0x7fff; // in words
 		int remain = sp[1]; // In words
 
-		int ofs_start = offset;
-		int ofs_end = offset + remain + 1;
-
-		if( ofs_start > sizeof(memory_buffer)/sizeof(memory_buffer[0]) )
+		if( offset == 0x7fff )
 		{
-			ofs_start = sizeof(memory_buffer)/sizeof(memory_buffer[0]);
-		}
+			// Control word
+			HSUSBCTX.USBHS_Endp_Busy[5] = 0;
 
-		if( ofs_end > sizeof(memory_buffer)/sizeof(memory_buffer[0]) )
-		{
-			ofs_end = sizeof(memory_buffer)/sizeof(memory_buffer[0]);
-		}
+			TIM1->ATRLR = sp[2];
+			TIM1->CH1CVR = sp[3];
+			TIM1->CH2CVR = sp[4];
+			TIM1->CH3CVR = sp[5];
 
-		// If invalid just truncate.
-		if( ofs_end - ofs_start > 126 )
-			ofs_end = ofs_start + 126;
+			TIM2->ATRLR = sp[2];
+			TIM2->CH1CVR = sp[3];
+			TIM2->CH2CVR = sp[4];
+			TIM2->CH3CVR = sp[5];
 
-		uint32_t * spp = (uint32_t*)(scratchpad + 4); // Remove header.
-
-		// Don't use do...while here because start could == end.
-		uint16_t * mba = ofs_start + (uint16_t*)&memory_buffer;
-		uint16_t * mbb = mba + HALF_BUFFER_BYTES/2;  ////////////////////////////XXX XXX XXX WHY??!? +1 SOMETIMES fixes things.
-		uint32_t * sppend = spp + (ofs_end - ofs_start);
-		while( spp != sppend )
-		{
-			uint32_t v = *(spp++);
-			*(mba++) = v & 0xffff;
-			*(mbb++) = v >> 16;
-		}
-
-		if( term )
-		{
-			TriggerEnable( (offset + remain + 1) );
+			TIM10->ATRLR = sp[2];
+			TIM10->CH1CVR = sp[3];
+			TIM10->CH2CVR = sp[4];
+			TIM10->CH3CVR = sp[5];
 		}
 		else
 		{
-			HSUSBCTX.USBHS_Endp_Busy[5] = 0;
+			int ofs_start = offset;
+			int ofs_end = offset + remain + 1;
+
+			if( ofs_start > sizeof(memory_buffer)/sizeof(memory_buffer[0]) )
+			{
+				ofs_start = sizeof(memory_buffer)/sizeof(memory_buffer[0]);
+			}
+
+			if( ofs_end > sizeof(memory_buffer)/sizeof(memory_buffer[0]) )
+			{
+				ofs_end = sizeof(memory_buffer)/sizeof(memory_buffer[0]);
+			}
+
+			// If invalid just truncate.
+			if( ofs_end - ofs_start > 126 )
+				ofs_end = ofs_start + 126;
+
+			uint32_t * spp = (uint32_t*)(scratchpad + 4); // Remove header.
+
+			// Don't use do...while here because start could == end.
+			uint16_t * mba = ofs_start + (uint16_t*)&memory_buffer;
+			uint16_t * mbb = mba + HALF_BUFFER_BYTES/2;  ////////////////////////////XXX XXX XXX WHY??!? +1 SOMETIMES fixes things.
+			uint32_t * sppend = spp + (ofs_end - ofs_start);
+			while( spp != sppend )
+			{
+				uint32_t v = *(spp++);
+				*(mba++) = v & 0xffff;
+				*(mbb++) = v >> 16;
+			}
+
+			if( term )
+			{
+				TriggerEnable( (offset + remain + 1) );
+			}
+			else
+			{
+				HSUSBCTX.USBHS_Endp_Busy[5] = 0;
+			}
 		}
 
 		// You must re-up these, not sure why but they get corrupt.
@@ -220,6 +259,20 @@ int main()
 	funPinMode( PA9, GPIO_CFGLR_OUT_10Mhz_PP ); // New PSU on signal
 
     Delay_Ms(200);
+
+	unsigned short * serial16 = string3.wString;
+	int i;
+	for( i = 0; i < 17; i++ )
+	{
+		int v = (&ESIG->UID0)[i>>3];
+		v>>=(4*(7-(i&7)));
+		v &= 0xf;
+		if( v >= 10 )
+			serial16[i] = 'a' + v - 10;
+		else
+			serial16[i] = '0' + v;
+	}
+
 	// Enable DMA
 	HSUSBSetup();
 
@@ -263,7 +316,7 @@ int main()
 	DMA1_Channel3->CFGR = 
 		DMA_CFGR1_DIR |                      // MEM2PERIPHERAL
 		DMA_CFGR1_PL |                       // High priority.
-		DMA_CFGR1_MSIZE_1 |                  // 32-bit memory
+		DMA_CFGR1_MSIZE_0 |                  // 16-bit memory
 		DMA_CFGR1_PSIZE_0 |                  // 16-bit peripheral
 		DMA_CFGR1_MINC |                     // Increase memory.
 		0 |                     // Circular mode.
@@ -290,13 +343,13 @@ int main()
 
 
     // DMA5 = T2C1
-	DMA1_Channel5->CNTR = sizeof(memory_buffer) / sizeof(memory_buffer[0]);
-	DMA1_Channel5->MADDR = ((uint32_t)memory_buffer) + 2;
+	DMA1_Channel5->CNTR = 1;
+	DMA1_Channel5->MADDR = (uint32_t)set_one;
 	DMA1_Channel5->PADDR = (uint32_t)&GPIOB->OUTDR;
 	DMA1_Channel5->CFGR = 
 		DMA_CFGR1_DIR |                      // MEM2PERIPHERAL
 		DMA_CFGR1_PL |                       // High priority.
-		DMA_CFGR1_MSIZE_1 |                  // 32-bit memory
+		DMA_CFGR1_MSIZE_0 |                  // 16-bit memory
 		DMA_CFGR1_PSIZE_0 |                  // 16-bit peripheral
 		DMA_CFGR1_MINC |                     // Increase memory.
 		0 |                     // Circular mode.
@@ -306,8 +359,8 @@ int main()
 
 
     // DMA7 = T2C2
-	DMA1_Channel7->CNTR = 1;
-	DMA1_Channel7->MADDR = (uint32_t)set_zero;
+	DMA1_Channel7->CNTR = sizeof(memory_buffer) / sizeof(memory_buffer[0]);
+	DMA1_Channel7->MADDR = ((uint32_t)memory_buffer)+HALF_BUFFER_BYTES;
 	DMA1_Channel7->PADDR = (uint32_t)&GPIOB->OUTDR;
 	DMA1_Channel7->CFGR = 
 		DMA_CFGR1_DIR |                      // MEM2PERIPHERAL
@@ -323,7 +376,7 @@ int main()
 
 	// DMA1 = T2C3
 	DMA1_Channel1->CNTR = 1;
-	DMA1_Channel1->MADDR = (uint32_t)set_one;
+	DMA1_Channel1->MADDR = (uint32_t)set_zero;
 	DMA1_Channel1->PADDR = (uint32_t)&GPIOB->OUTDR;
 	DMA1_Channel1->CFGR = 
 		DMA_CFGR1_DIR |                      // MEM2PERIPHERAL
@@ -337,18 +390,14 @@ int main()
 		DMA_CFGR1_EN;                        // Enable
 
 
-
-
-
-
     // DMA8 = T10C1
-	DMA2_Channel8->CNTR = sizeof(memory_buffer) / sizeof(memory_buffer[0]);
-	DMA2_Channel8->MADDR = ((uint32_t)memory_buffer) + 2;
+	DMA2_Channel8->CNTR = 1;
+	DMA2_Channel8->MADDR = (uint32_t)set_one;
 	DMA2_Channel8->PADDR = (uint32_t)&GPIOA->OUTDR;
 	DMA2_Channel8->CFGR = 
 		DMA_CFGR1_DIR |                      // MEM2PERIPHERAL
 		DMA_CFGR1_PL |                       // High priority.
-		DMA_CFGR1_MSIZE_1 |                  // 32-bit memory
+		DMA_CFGR1_MSIZE_0 |                  // 16-bit memory
 		0                 |                  // 8-bit peripheral
 		DMA_CFGR1_MINC |                     // Increase memory.
 		0 |                     // Circular mode.
@@ -358,8 +407,8 @@ int main()
 
 
     // DMA10 = T10C2
-	DMA2_Channel10->CNTR = 1;
-	DMA2_Channel10->MADDR = (uint32_t)set_zero;
+	DMA2_Channel10->CNTR = sizeof(memory_buffer) / sizeof(memory_buffer[0]);
+	DMA2_Channel10->MADDR = ((uint32_t)memory_buffer)+HALF_BUFFER_BYTES;
 	DMA2_Channel10->PADDR = (uint32_t)&GPIOA->OUTDR;
 	DMA2_Channel10->CFGR = 
 		DMA_CFGR1_DIR |                      // MEM2PERIPHERAL
@@ -375,7 +424,7 @@ int main()
 
 	// DMA9 = T10C3
 	DMA2_Channel9->CNTR = 1;
-	DMA2_Channel9->MADDR = (uint32_t)set_one;
+	DMA2_Channel9->MADDR = (uint32_t)set_zero;
 	DMA2_Channel9->PADDR = (uint32_t)&GPIOA->OUTDR;
 	DMA2_Channel9->CFGR = 
 		DMA_CFGR1_DIR |                      // MEM2PERIPHERAL
@@ -589,6 +638,8 @@ int main()
 							bcol = 0x0000;
 						break;
 					}
+					// dim down.
+					if( ((pos & 7) < 2) ) bcol = 0;
 					mba[i] = bcol;
 					mbb[i] = bcol;
 				}

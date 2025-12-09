@@ -11,7 +11,7 @@
 #define USB_VENDOR_ID  0x1209
 #define USB_PRODUCT_ID 0x2305
 
-#define NR_LEDS_PER_STRAND     215
+#define NR_LEDS_PER_STRAND     (215)
 #define block_size             512
 #define STRANDS                32
 
@@ -38,6 +38,19 @@ static void sighandler(int signum)
 ////////////////////////////////////////////////////////////////////////
 // LED Drawing function
 ////////////////////////////////////////////////////////////////////////
+
+static inline int hue2( const int n )
+{
+	if( n < 64 )
+		return n * 4;
+	else if( n < 128 )
+		return 255;
+	else if( n < 192 )
+		return 252 - (n-128)*4;
+	else return 0;
+		
+}
+
 static inline void UpdateLEDs()
 {
 	static uint32_t phases[NR_LEDS_PER_STRAND][STRANDS];
@@ -54,7 +67,25 @@ static inline void UpdateLEDs()
 
 			ph = (ph>>10) & 0xff;
 
-			LEDs[l][s] = EHSVtoHEX( ph, 255, 255 );
+			//LEDs[l][s] = EHSVtoHEX( ph, 255, 64 );
+
+			uint32_t rgb = 0;
+			int r = hue2((ph + 0)&0xff);
+			int g = hue2((ph + 85)&0xff);
+			int b = hue2((ph + 171)&0xff);
+
+			r-=128;
+			g-=128;
+			b-=128;
+
+			if( r < 0 ) r = 0;
+			if( g < 0 ) g = 0;
+			if( b < 0 ) b = 0;
+			if( r > 255 ) r = 255;
+			if( g > 255 ) g = 255;
+			if( b > 255 ) b = 255;
+
+			LEDs[l][s] = r | (g<<8) | (b<<16);
 		}
 	}
 }

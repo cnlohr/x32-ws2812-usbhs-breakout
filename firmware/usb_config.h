@@ -248,7 +248,6 @@ static const uint8_t config_descriptor[ ] =
 
 #define STR_MANUFACTURER u"CNLohr"
 #define STR_PRODUCT      u"ch32fun ch32v30x USBHS Test"
-#define STR_SERIAL       u"CUSTOMDEVICE000"
 
 struct usb_string_descriptor_struct {
 	uint8_t bLength;
@@ -265,15 +264,24 @@ const static struct usb_string_descriptor_struct string1 __attribute__((section(
 	3,
 	STR_MANUFACTURER
 };
+
+
 const static struct usb_string_descriptor_struct string2 __attribute__((section(".rodata")))  = {
 	sizeof(STR_PRODUCT),
 	3,
 	STR_PRODUCT
 };
-const static struct usb_string_descriptor_struct string3 __attribute__((section(".rodata")))  = {
-	sizeof(STR_SERIAL),
-	3,
-	STR_SERIAL
+
+
+struct usb_string_descriptor_struct_serial_16 {
+	uint8_t bLength;
+	uint8_t bDescriptorType;
+	uint16_t wString[17];
+};
+
+struct usb_string_descriptor_struct_serial_16 string3 = {
+	34,
+	3
 };
 
 // This table defines which descriptor data is sent for each specific
@@ -295,7 +303,7 @@ const static struct descriptor_list_struct {
 	{0x00000300, (const uint8_t *)&string0, 4},
 	{0x04090301, (const uint8_t *)&string1, sizeof(STR_MANUFACTURER)},
 	{0x04090302, (const uint8_t *)&string2, sizeof(STR_PRODUCT)},	
-	{0x04090303, (const uint8_t *)&string3, sizeof(STR_SERIAL)}
+	{0x04090303, (const uint8_t *)&string3, 34}
 };
 #define DESCRIPTOR_LIST_ENTRIES ((sizeof(descriptor_list))/(sizeof(struct descriptor_list_struct)) )
 
