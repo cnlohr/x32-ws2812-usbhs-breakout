@@ -15,6 +15,10 @@ int need_to_confirm = 0;
 
 #define BUFFER_SIZE_WORDS 7368 // 306 LEDs max.
 volatile uint32_t memory_buffer[BUFFER_SIZE_WORDS] __attribute__((aligned(4)));
+static const uint16_t set_zero[1] __attribute__((aligned(4))) =  { 0x0000 };
+static const uint16_t set_one[1]  __attribute__((aligned(4))) =  { 0xffff };
+
+
 
 #define HALF_BUFFER_BYTES (BUFFER_SIZE_WORDS*4/2)
 
@@ -246,17 +250,12 @@ void HandleGotEPComplete( struct _USBState * ctx, int ep )
 	}
 }
 
+
 int main()
 {
 	SystemInit();
 
 	funGpioInitAll();
-
-
-	// No idea why, these need to be here.
-	volatile uint16_t set_zero[1] __attribute__((aligned(4))) =  { 0x0000 };
-	volatile uint16_t set_one[1]  __attribute__((aligned(4))) =  { 0xffff };
-
 
 	funPinMode( PA3, GPIO_CFGLR_OUT_10Mhz_PP ); // Old PSU on signal
 	funPinMode( PA9, GPIO_CFGLR_OUT_10Mhz_PP ); // New PSU on signal
@@ -294,8 +293,6 @@ int main()
 
 	GPIOB->CFGLR = 0x11111111; // All output.  All 10MHz
 	GPIOB->CFGHR = 0xbb111111; // All output.  All 10MHz  (Except for USB pins, PB6, PB7)
-
-	set_one[0] = 0xffff;
 
 	// DMA2 = T1CH1
 	DMA1_Channel2->CNTR = 1;
