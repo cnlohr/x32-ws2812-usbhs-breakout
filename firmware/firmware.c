@@ -40,6 +40,7 @@ void TriggerEnable( int nrsamps )
 	GPIOB->OUTDR = 0x0;
 	GPIOA->OUTDR &= 0xff00;
 
+	// TIM1CH2
 	DMA1_Channel3->CNTR = nrsamps;
 	DMA1_Channel3->MADDR = (uint32_t)(memory_buffer);
 	DMA1_Channel3->PADDR = (uint32_t)&GPIOC->OUTDR;
@@ -55,6 +56,7 @@ void TriggerEnable( int nrsamps )
 		DMA_CFGR1_EN;                        // Enable
 
 
+	// TIM2CH2
 	DMA1_Channel7->CNTR = nrsamps;
 	DMA1_Channel7->MADDR = ((uint32_t)memory_buffer)+HALF_BUFFER_BYTES;
 	DMA1_Channel7->PADDR = (uint32_t)&GPIOB->OUTDR;
@@ -70,6 +72,7 @@ void TriggerEnable( int nrsamps )
 		DMA_CFGR1_EN;                        // Enable
 
 
+	// TIM10CH2
 	DMA2_Channel10->CNTR = nrsamps;
 	DMA2_Channel10->MADDR = ((uint32_t)memory_buffer)+HALF_BUFFER_BYTES;
 	DMA2_Channel10->PADDR = (uint32_t)&GPIOA->OUTDR;
@@ -299,95 +302,53 @@ int main()
 	DMA1_Channel2->MADDR = (uint32_t)set_one;
 	DMA1_Channel2->PADDR = (uint32_t)&GPIOC->OUTDR;
 	DMA1_Channel2->CFGR = 
-		DMA_CFGR1_DIR |                      // MEM2PERIPHERAL
-		DMA_CFGR1_PL |                       // High priority.
-		DMA_CFGR1_MSIZE_0 |                  // 16-bit memory
-		DMA_CFGR1_PSIZE_0 |                  // 16-bit peripheral
-		0 |                     // Do not increase memory
-		DMA_CFGR1_CIRC |                     // Circular mode.
-		0 |                     // Half-trigger
-		0 |                     // Whole-trigger
-		DMA_CFGR1_EN;                        // Enable
+		DMA_CFGR1_DIR |                    // MEM2PERIPHERAL
+		DMA_CFGR1_PL |                     // High priority.
+		DMA_CFGR1_MSIZE_0 |                // 16-bit memory
+		DMA_CFGR1_PSIZE_0 |                // 16-bit peripheral
+		DMA_CFGR1_CIRC |                   // Circular mode.
+		DMA_CFGR1_EN;                      // Enable
 
-    // DMA3 = T1C2
-	DMA1_Channel3->CNTR = sizeof(memory_buffer) / sizeof(memory_buffer[0]);
-	DMA1_Channel3->MADDR = ((uint32_t)memory_buffer);
-	DMA1_Channel3->PADDR = (uint32_t)&GPIOC->OUTDR;
-	DMA1_Channel3->CFGR = 
-		DMA_CFGR1_DIR |                      // MEM2PERIPHERAL
-		DMA_CFGR1_PL |                       // High priority.
-		DMA_CFGR1_MSIZE_0 |                  // 16-bit memory
-		DMA_CFGR1_PSIZE_0 |                  // 16-bit peripheral
-		DMA_CFGR1_MINC |                     // Increase memory.
-		0 |                     // Circular mode.
-		DMA_CFGR1_HTIE |                     // Half-trigger
-		DMA_CFGR1_TCIE |                     // Whole-trigger
-		DMA_CFGR1_EN;                        // Enable
-
+    // DMA3 = T1C2 configured later
 
     // DMA6 = T1C3
 	DMA1_Channel6->CNTR = 1;
 	DMA1_Channel6->MADDR = (uint32_t)set_zero;
 	DMA1_Channel6->PADDR = (uint32_t)&GPIOC->OUTDR;
 	DMA1_Channel6->CFGR = 
-		DMA_CFGR1_DIR |                      // MEM2PERIPHERAL
-		DMA_CFGR1_PL |                       // High priority.
-		DMA_CFGR1_MSIZE_0 |                  // 16-bit memory
-		DMA_CFGR1_PSIZE_0 |                  // 16-bit peripheral
-		0 |                     // Do not increase memory
-		DMA_CFGR1_CIRC |                     // Circular mode.
-		0 |                     // Half-trigger
-		0 |                     // Whole-trigger
-		DMA_CFGR1_EN;                        // Enable
-
-
+		DMA_CFGR1_DIR |                    // MEM2PERIPHERAL
+		DMA_CFGR1_PL |                     // High priority.
+		DMA_CFGR1_MSIZE_0 |                // 16-bit memory
+		DMA_CFGR1_PSIZE_0 |                // 16-bit peripheral
+		DMA_CFGR1_CIRC |                   // Circular mode.
+		DMA_CFGR1_EN;                      // Enable
 
     // DMA5 = T2C1
 	DMA1_Channel5->CNTR = 1;
 	DMA1_Channel5->MADDR = (uint32_t)set_one;
 	DMA1_Channel5->PADDR = (uint32_t)&GPIOB->OUTDR;
 	DMA1_Channel5->CFGR = 
-		DMA_CFGR1_DIR |                      // MEM2PERIPHERAL
-		DMA_CFGR1_PL |                       // High priority.
-		DMA_CFGR1_MSIZE_0 |                  // 16-bit memory
-		DMA_CFGR1_PSIZE_0 |                  // 16-bit peripheral
-		DMA_CFGR1_MINC |                     // Increase memory.
-		0 |                     // Circular mode.
-		DMA_CFGR1_HTIE |                     // Half-trigger
-		DMA_CFGR1_TCIE |                     // Whole-trigger
-		DMA_CFGR1_EN;                        // Enable
+		DMA_CFGR1_DIR |                    // MEM2PERIPHERAL
+		DMA_CFGR1_PL |                     // High priority.
+		DMA_CFGR1_MSIZE_0 |                // 16-bit memory
+		DMA_CFGR1_PSIZE_0 |                // 16-bit peripheral
+		DMA_CFGR1_CIRC |                   // Circular mode.
+		DMA_CFGR1_EN;                      // Enable
 
 
-    // DMA7 = T2C2
-	DMA1_Channel7->CNTR = sizeof(memory_buffer) / sizeof(memory_buffer[0]);
-	DMA1_Channel7->MADDR = ((uint32_t)memory_buffer)+HALF_BUFFER_BYTES;
-	DMA1_Channel7->PADDR = (uint32_t)&GPIOB->OUTDR;
-	DMA1_Channel7->CFGR = 
-		DMA_CFGR1_DIR |                      // MEM2PERIPHERAL
-		DMA_CFGR1_PL |                       // High priority.
-		DMA_CFGR1_MSIZE_0 |                  // 16-bit memory
-		DMA_CFGR1_PSIZE_0 |                  // 16-bit peripheral
-		0 |                     // Do not increase memory
-		DMA_CFGR1_CIRC |                     // Circular mode.
-		0 |                     // Half-trigger
-		0 |                     // Whole-trigger
-		DMA_CFGR1_EN;                        // Enable
-
+    // DMA7 = T2C2 configured later
 
 	// DMA1 = T2C3
 	DMA1_Channel1->CNTR = 1;
 	DMA1_Channel1->MADDR = (uint32_t)set_zero;
 	DMA1_Channel1->PADDR = (uint32_t)&GPIOB->OUTDR;
 	DMA1_Channel1->CFGR = 
-		DMA_CFGR1_DIR |                      // MEM2PERIPHERAL
-		DMA_CFGR1_PL |                       // High priority.
-		DMA_CFGR1_MSIZE_0 |                  // 16-bit memory
-		DMA_CFGR1_PSIZE_0 |                  // 16-bit peripheral
-		0 |                     // Do not increase memory
-		DMA_CFGR1_CIRC |                     // Circular mode.
-		0 |                     // Half-trigger
-		0 |                     // Whole-trigger
-		DMA_CFGR1_EN;                        // Enable
+		DMA_CFGR1_DIR |                    // MEM2PERIPHERAL
+		DMA_CFGR1_PL |                     // High priority.
+		DMA_CFGR1_MSIZE_0 |                // 16-bit memory
+		DMA_CFGR1_PSIZE_0 |                // 16-bit peripheral
+		DMA_CFGR1_CIRC |                   // Circular mode.
+		DMA_CFGR1_EN;                      // Enable
 
 
     // DMA8 = T10C1
@@ -395,47 +356,27 @@ int main()
 	DMA2_Channel8->MADDR = (uint32_t)set_one;
 	DMA2_Channel8->PADDR = (uint32_t)&GPIOA->OUTDR;
 	DMA2_Channel8->CFGR = 
-		DMA_CFGR1_DIR |                      // MEM2PERIPHERAL
-		DMA_CFGR1_PL |                       // High priority.
-		DMA_CFGR1_MSIZE_0 |                  // 16-bit memory
-		0                 |                  // 8-bit peripheral
-		DMA_CFGR1_MINC |                     // Increase memory.
-		0 |                     // Circular mode.
-		DMA_CFGR1_HTIE |                     // Half-trigger
-		DMA_CFGR1_TCIE |                     // Whole-trigger
-		DMA_CFGR1_EN;                        // Enable
+		DMA_CFGR1_DIR |                    // MEM2PERIPHERAL
+		DMA_CFGR1_PL |                     // High priority.
+		DMA_CFGR1_MSIZE_0 |                // 16-bit memory
+		0                 |                // 8-bit peripheral
+		DMA_CFGR1_CIRC |                   // Circular mode.
+		DMA_CFGR1_EN;                      // Enable
 
 
-    // DMA10 = T10C2
-	DMA2_Channel10->CNTR = sizeof(memory_buffer) / sizeof(memory_buffer[0]);
-	DMA2_Channel10->MADDR = ((uint32_t)memory_buffer)+HALF_BUFFER_BYTES;
-	DMA2_Channel10->PADDR = (uint32_t)&GPIOA->OUTDR;
-	DMA2_Channel10->CFGR = 
-		DMA_CFGR1_DIR |                      // MEM2PERIPHERAL
-		DMA_CFGR1_PL |                       // High priority.
-		DMA_CFGR1_MSIZE_0 |                  // 16-bit memory
-		0 |                                 // 8-bit peripheral
-		0 |                     // Do not increase memory
-		DMA_CFGR1_CIRC |                     // Circular mode.
-		0 |                     // Half-trigger
-		0 |                     // Whole-trigger
-		DMA_CFGR1_EN;                        // Enable
-
+    // DMA10 = T10C2 configured later
 
 	// DMA9 = T10C3
 	DMA2_Channel9->CNTR = 1;
 	DMA2_Channel9->MADDR = (uint32_t)set_zero;
 	DMA2_Channel9->PADDR = (uint32_t)&GPIOA->OUTDR;
 	DMA2_Channel9->CFGR = 
-		DMA_CFGR1_DIR |                      // MEM2PERIPHERAL
-		DMA_CFGR1_PL |                       // High priority.
-		DMA_CFGR1_MSIZE_0 |                  // 16-bit memory
+		DMA_CFGR1_DIR |                    // MEM2PERIPHERAL
+		DMA_CFGR1_PL |                     // High priority.
+		0 |                                // 8-bit memory
 		0 |                                // 8-bit peripheral
-		0 |                     // Do not increase memory
-		DMA_CFGR1_CIRC |                     // Circular mode.
-		0 |                     // Half-trigger
-		0 |                     // Whole-trigger
-		DMA_CFGR1_EN;                        // Enable
+		DMA_CFGR1_CIRC |                   // Circular mode.
+		DMA_CFGR1_EN;                      // Enable
 
 	// Setup Timer1.
 	RCC->APB2PRSTR = RCC_APB2Periph_TIM1 | RCC_APB2Periph_TIM10;    // Reset Timers
@@ -447,35 +388,31 @@ int main()
 	TIM1->PSC = 0x0000;                      // Prescaler 
 	TIM1->ATRLR = TRIG_FULLCYCLE;
 	TIM1->SWEVGR = TIM_UG | TIM_TG;          // Reload immediately + Trigger DMA
-
 	TIM1->CH1CVR = TRIG_INITIAL;
 	TIM1->CH2CVR = TRIG_DATA;
 	TIM1->CH3CVR = TRIG_ZERO;
-	TIM1->CTLR1 = TIM_CEN;                   // Enable TIM1
 	TIM1->DMAINTENR = TIM_CC1DE | TIM_CC2DE | TIM_CC3DE;   // Trigger DMA on TC match 1 (DMA Ch2) and TC match 2 (DMA Ch3)
-
+	TIM1->CTLR1 = TIM_CEN;                   // Enable TIM1
 
 	// Timer 2 setup.
 	TIM2->PSC = 0x0000;                      // Prescaler 
 	TIM2->ATRLR = TRIG_FULLCYCLE;
 	TIM2->SWEVGR = TIM_UG | TIM_TG;          // Reload immediately + Trigger DMA
-
 	TIM2->CH1CVR = TRIG_INITIAL;
 	TIM2->CH2CVR = TRIG_DATA;
 	TIM2->CH3CVR = TRIG_ZERO;
-	TIM2->CTLR1 = TIM_CEN;                   // Enable TIM1
 	TIM2->DMAINTENR = TIM_CC1DE | TIM_CC2DE | TIM_CC3DE;   // Trigger DMA on TC match 1 (DMA Ch2) and TC match 2 (DMA Ch3)
+	TIM2->CTLR1 = TIM_CEN;                   // Enable TIM1
 
 	// Timer 10 setup.
 	TIM10->PSC = 0x0000;                      // Prescaler 
 	TIM10->ATRLR = TRIG_FULLCYCLE;
 	TIM10->SWEVGR = TIM_UG | TIM_TG;          // Reload immediately + Trigger DMA
-
 	TIM10->CH1CVR = TRIG_INITIAL;
 	TIM10->CH2CVR = TRIG_DATA;
 	TIM10->CH3CVR = TRIG_ZERO;
-	TIM10->CTLR1 = TIM_CEN;                   // Enable TIM1
 	TIM10->DMAINTENR = TIM_CC1DE | TIM_CC2DE | TIM_CC3DE;   // Trigger DMA on TC match 1 (DMA Ch2) and TC match 2 (DMA Ch3)
+	TIM10->CTLR1 = TIM_CEN;                   // Enable TIM1
 
 
 	// Override EP5
@@ -545,12 +482,12 @@ int main()
 			TIM2->CTLR1 = 0;
 			GPIOB->OUTDR = 0;
 			TIM2->CNT = 0;
-			DMA1_Channel5->CFGR = 0;
+			DMA1_Channel7->CFGR = 0;
 
 			TIM10->CTLR1 = 0;
 			GPIOA->OUTDR = 0;
 			TIM10->CNT = 0;
-			DMA2_Channel8->CFGR = 0;
+			DMA2_Channel10->CFGR = 0;
 
 			streaming = 0;
 			if( need_to_confirm )
@@ -575,12 +512,12 @@ int main()
 				TIM2->CTLR1 = 0;
 				GPIOB->OUTDR = 0;
 				TIM2->CNT = 0;
-				DMA1_Channel5->CFGR = 0;
+				DMA1_Channel7->CFGR = 0;
 
 				TIM10->CTLR1 = 0;
 				GPIOA->OUTDR = 0;
 				TIM10->CNT = 0;
-				DMA2_Channel8->CFGR = 0;
+				DMA2_Channel10->CFGR = 0;
 
 				streaming = 0;
 
