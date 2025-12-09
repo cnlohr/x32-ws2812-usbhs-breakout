@@ -110,9 +110,9 @@ int USBCallbackFill( uint8_t * data, int device )
 		uint16_t * d = (uint16_t*)data;
 		d[0] = 0xffff; // We are going to configure mode.
 		d[1] = 0xffff;
-		d[2] = 34*4+3;  // Period
+		d[2] = 37*4;  // Period
 		d[3] = 0;     // One timing
-		d[4] = 12*4;  // Data timing
+		d[4] = 13*4;  // Data timing
 		d[5] = 26*4;  // Zero timing
 		return 6*2;
 	}
