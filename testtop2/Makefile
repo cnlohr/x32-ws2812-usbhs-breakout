@@ -1,7 +1,7 @@
 all : testtop
 
 testtop : testtop.c
-	gcc -g -o $@ $^ -I../../../minichlink -ludev -lusb-1.0
+	gcc -g -o $@ $^ -I../../../minichlink -ludev -lusb-1.0 -Wall
 
 install_udev_rules : 
 	sudo cp 99-x32-ws2812-usbhs-breakout.rules /etc/udev/rules.d/

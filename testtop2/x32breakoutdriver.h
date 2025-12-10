@@ -31,11 +31,11 @@ void CleanupBreakoutDriver();
 
 static uint8_t buffers[DEVICES][TRANSFERS][block_size];
 static libusb_context *ctx = NULL;
+libusb_hotplug_callback_handle callback_handle;
 static libusb_device_handle * handles[DEVICES];
+static libusb_device * devList[DEVICES];
 static struct libusb_transfer * transfers[DEVICES][TRANSFERS];
-static int abortLoop = 0;
 static int xfertotal = 0;
-static int triggers = 0;
 static int done_frame = 0;
 static int done_mask = 0;
 static int frame_num;
@@ -43,11 +43,6 @@ static int frame_num;
 uint32_t LEDs[DEVICES][NR_LEDS_PER_STRAND][STRANDS];
 int configured[DEVICES];
 
-static void sighandler(int signum)
-{
-	printf( "\nInterrupt signal received\n" );
-	abortLoop = 1;
-}
 
 ////////////////////////////////////////////////////////////////////////
 // USB Callback
@@ -110,7 +105,6 @@ int USBCallbackFill( uint8_t * data, int device )
 		}
 	}
 
-
 	if( terminal )
 	{
 		ledstate[device] = 0;
@@ -131,6 +125,137 @@ void xcallback (struct libusb_transfer *transfer)
 	libusb_submit_transfer( transfer );
 }
 
+void DeviceArrive( struct libusb_device *dev )
+{
+	struct libusb_device_descriptor desc;
+	libusb_device_handle *thandle;
+	int r = libusb_get_device_descriptor(dev, &desc);
+	uint8_t sserial[64];
+
+	if( desc.idVendor != USB_VENDOR_ID || desc.idProduct != USB_PRODUCT_ID )
+	{
+		return;
+	}
+
+	int err = libusb_open(dev, &thandle);
+	if( err )
+	{
+		fprintf( stderr, "Error opening device.  Did you forget to `make install_udev_rules`?\n" );
+		return;
+	}
+
+	int captured = 0;
+	int device = 0;
+
+	if( thandle )
+	{
+		if( libusb_get_string_descriptor_ascii( thandle, desc.iSerialNumber, sserial, 63 ) >= 0 )
+		{
+			sserial[63] = '\0';
+			fprintf( stderr, "Found serial: %s ", sserial );
+			int n;
+			for( n = 0; n < DEVICES; n++ )
+			{
+				if( strcmp( serials[n], (const char*)sserial ) == 0 )
+				{
+					fprintf( stderr, "captured as %d\n", n );
+					captured = 1;
+					handles[n] = thandle;
+					devList[n] = dev;
+					device = n;
+				}
+			}
+			if( !captured)
+			{
+				fprintf( stderr, "skipped\n" );
+			}
+		}
+	}
+	if( !captured )
+	{
+		libusb_close(thandle);
+		return;
+	}
+
+	libusb_device_handle * handle = handles[device];
+	if( !handle )
+	{
+		fprintf( stderr, "Error: device with serial %s not found\n", serials[device] );
+		return;
+	}
+
+	libusb_detach_kernel_driver(handle, 3);
+
+	r = libusb_claim_interface(handle, 3 );
+	if( r < 0 )
+	{
+		fprintf(stderr, "usb_claim_interface error %d\n", r);
+		return;
+	}
+
+	int n;
+	for( n = 0; n < TRANSFERS; n++ )
+	{
+		struct libusb_transfer * t = transfers[device][n] = libusb_alloc_transfer( 0 );
+		libusb_fill_bulk_transfer( t, handle, 0x05 /*Endpoint for send */, buffers[device][n], block_size, xcallback, (void*)(intptr_t)n, 1000 );
+		t->user_data = (void*)(uintptr_t)device;
+		t->length = USBCallbackFill( t->buffer, device );
+		libusb_submit_transfer( t );
+	}
+	done_mask |= 1<<device;
+	done_frame |= 1<<device;
+	configured[device] = 0;
+}
+
+// Pass 0 for dev to destroy all devices and transfers.
+void DeviceDepart( struct libusb_device *dev )
+{
+	int device;
+	for( device = 0; device < DEVICES; device++ )
+	{
+		if( devList[device] == dev || dev == 0 )
+		{
+			int n;
+			for( n = 0; n < TRANSFERS; n++ )
+			{
+				if( transfers[device][n] )
+				{
+					libusb_cancel_transfer( transfers[device][n] );
+				 	libusb_free_transfer( transfers[device][n] );
+				}
+			}
+			if( handles[device] )
+			{
+				libusb_release_interface (handles[device], 0);
+				libusb_close(handles[device]);
+			}
+		}
+	}
+}
+ 
+int hotplug_callback(struct libusb_context *ctx, struct libusb_device *dev, libusb_hotplug_event event, void *user_data)
+{
+	struct libusb_device_descriptor desc;
+
+	(void)libusb_get_device_descriptor(dev, &desc);
+
+	if (LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED == event)
+	{
+		DeviceArrive( dev );
+	}
+	else if (LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT == event)
+	{
+		DeviceDepart( dev );
+	}
+	else
+	{
+		printf("Unhandled event %d\n", event);
+	}
+
+	return 0;
+}
+
+
 void TickBreakoutDriver()
 {
 	libusb_handle_events(ctx);
@@ -138,13 +263,18 @@ void TickBreakoutDriver()
 
 int SetupBreakoutDriver()
 {
-	//Pass Interrupt Signal to our handler
-	signal(SIGINT, sighandler);
-
 	libusb_init(&ctx);
 	libusb_set_option(ctx, LIBUSB_OPTION_LOG_LEVEL, 0);
 
-	int rtotal = 0, stotal = 0;
+	int rc = libusb_hotplug_register_callback(NULL, LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED |
+		LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT, 0, USB_VENDOR_ID, USB_PRODUCT_ID,
+		LIBUSB_HOTPLUG_MATCH_ANY, hotplug_callback, NULL,
+		&callback_handle);
+	if (LIBUSB_SUCCESS != rc)
+	{
+		fprintf(stderr, "Error creating a hotplug callback\n");
+		return -1;
+	}
 
 	struct libusb_device **devs;
 	int cnt = libusb_get_device_list(ctx, &devs);
@@ -155,108 +285,16 @@ int SetupBreakoutDriver()
 	}
 	for ( int c = 0; c < cnt; c++ )
 	{
-		struct libusb_device_descriptor desc;
-		libusb_device_handle *thandle;
-		int r = libusb_get_device_descriptor(devs[c], &desc);
-		uint8_t sserial[64];
-
-		if( desc.idVendor != USB_VENDOR_ID || desc.idProduct != USB_PRODUCT_ID )
-		{
-			continue;
-		}
-
-		int err = libusb_open(devs[c], &thandle);
-		if( err )
-		{
-			fprintf( stderr, "Error opening device.  Did you forget to `make install_udev_rules`?\n" );
-			continue;
-		}
-
-		int captured = 0;
-
-		if( thandle )
-		{
-			if( libusb_get_string_descriptor_ascii( thandle, desc.iSerialNumber, sserial, 63 ) >= 0 )
-			{
-				sserial[63] = '\0';
-				fprintf( stderr, "Found serial: %s ", sserial );
-				int n;
-				for( n = 0; n < DEVICES; n++ )
-				{
-					if( strcmp( serials[n], sserial ) == 0 )
-					{
-						fprintf( stderr, "captured as %d\n", n );
-						captured = 1;
-						handles[n] = thandle;
-					}
-				}
-				if( !captured)
-				{
-					fprintf( stderr, "skipped\n" );
-				}
-			}
-		}
-		if( !captured )
-		{
-			libusb_close(thandle);
-		}
+		DeviceArrive( devs[c] );
 	}
 	libusb_free_device_list(devs, 1);
-
-	int device = 0;
-	for( device = 0; device < DEVICES; device++ )
-	{
-		libusb_device_handle * handle = handles[device];
-		if( !handle )
-		{
-			fprintf( stderr, "Error: device with serial %s not found\n", serials[device] );
-			continue;
-		}
-
-		libusb_detach_kernel_driver(handle, 3);
-
-		int r = 1;
-		r = libusb_claim_interface(handle, 3 );
-		if( r < 0 )
-		{
-			fprintf(stderr, "usb_claim_interface error %d\n", r);
-			return 2;
-		}
-
-		int n;
-		for( n = 0; n < TRANSFERS; n++ )
-		{
-			struct libusb_transfer * t = transfers[device][n] = libusb_alloc_transfer( 0 );
-			libusb_fill_bulk_transfer( t, handle, 0x05 /*Endpoint for send */, buffers[device][n], block_size, xcallback, (void*)(intptr_t)n, 1000 );
-			t->user_data = (void*)(uintptr_t)device;
-			t->length = USBCallbackFill( t->buffer, device );
-			libusb_submit_transfer( t );
-		}
-		done_mask |= 1<<device;
-	}
-
+	return 0;
 }
 
 void CleanupBreakoutDriver()
 {
-	int device;
-	for( device = 0; device < DEVICES; device++ )
-	{
-		int n;
-		for( n = 0; n < TRANSFERS; n++ )
-		{
-			if( transfers[device][n] )
-			{
-				libusb_cancel_transfer( transfers[device][n] );
-			 	libusb_free_transfer( transfers[device][n] );
-			}
-		}
-		if( handles[device] )
-		{
-			libusb_release_interface (handles[device], 0);
-			libusb_close(handles[device]);
-		}
-	}
+	libusb_hotplug_deregister_callback(NULL, callback_handle);
+
 
 	libusb_exit(NULL);
 }

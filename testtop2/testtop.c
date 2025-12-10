@@ -11,6 +11,9 @@
 #define DEVICES 2
 const char * serials[DEVICES] = { "f38dabcd5b6ebc14", "d3f9abcd3bdabc14" };
 
+static int abortLoop = 0;
+static int triggers = 0;
+
 #include "x32breakoutdriver.h"
 
 ////////////////////////////////////////////////////////////////////////
@@ -50,7 +53,6 @@ static inline void UpdateLEDs()
 
 				//LEDs[l][s] = EHSVtoHEX( ph, 255, 64 );
 
-				uint32_t rgb = 0;
 				int r = hue2((ph + 0)&0xff);
 				int g = hue2((ph + 85)&0xff);
 				int b = hue2((ph + 171)&0xff);
@@ -72,11 +74,19 @@ static inline void UpdateLEDs()
 	}
 }
 
+static void sighandler(int signum)
+{
+	printf( "\nInterrupt signal received\n" );
+	abortLoop = 1;
+}
+
 int main(int argc, char **argv)
 {
-	double dRecvTotalTime = 0;
 	double dSendTotalTime = 0;
 	double dLastPrint = OGGetAbsoluteTime();
+
+	//Pass Interrupt Signal to our handler
+	signal(SIGINT, sighandler);
 
 	SetupBreakoutDriver();
 
@@ -84,6 +94,7 @@ int main(int argc, char **argv)
 	{
 		double dNow = OGGetAbsoluteTime();
 
+		// TODO: Make this timeoutable.
 		TickBreakoutDriver();
 
 		if( dNow - dLastPrint > 1 )
@@ -95,9 +106,9 @@ int main(int argc, char **argv)
 			dSendTotalTime = 0;
 			dLastPrint = dNow;
 		}
-
 		if( done_frame == done_mask )
 		{
+			// TODO: Make this threadable, with a semaphore maybe?
 			frame_num++;
 			triggers++;
 			done_frame = 0;
