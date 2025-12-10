@@ -202,6 +202,7 @@ void DeviceArrive( struct libusb_device *dev )
 		t->length = USBCallbackFill( t->buffer, device );
 		libusb_submit_transfer( t );
 	}
+	printf( "Adding Device %d\n", device );
 	done_mask |= 1<<device;
 	done_frame |= 1<<device;
 	configured[device] = 0;
