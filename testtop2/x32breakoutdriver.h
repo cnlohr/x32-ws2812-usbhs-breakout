@@ -156,11 +156,8 @@ void DeviceArrive( struct libusb_device *dev )
 
 	int captured = 0;
 	int device = 0;
-	fprintf( stderr, "Adding\n" );
 	if( thandle )
 	{
-		fprintf( stderr, "Getting serial from ID %d\n", desc.iSerialNumber );
-
 		int serv = libusb_get_string_descriptor_ascii( thandle, desc.iSerialNumber, sserial, 63 );
 		if( serv >= 0 )
 		{
