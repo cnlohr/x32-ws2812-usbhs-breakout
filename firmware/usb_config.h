@@ -272,6 +272,7 @@ const static struct usb_string_descriptor_struct string2 __attribute__((section(
 	STR_PRODUCT
 };
 
+// Serial number
 
 struct usb_string_descriptor_struct_serial_16 {
 	uint8_t bLength;
@@ -282,7 +283,27 @@ struct usb_string_descriptor_struct_serial_16 {
 struct usb_string_descriptor_struct_serial_16 string3 = {
 	34,
 	3
+	// Serial # gets filled in at runtime.
 };
+
+// Microsoft 0xEE WINUSB Descriptor
+
+typedef struct {
+	uint8_t bLength;
+	uint8_t bDescriptorType;
+	uint8_t qwSignature[14];
+	uint8_t bMS_VendorCode;
+	uint8_t bPad;
+} usb_os_str_desc_t;
+
+const static usb_os_str_desc_t msft_desc __attribute__((section(".rodata")))  = {
+	.bLength = 0x12,
+	.bDescriptorType = 0x03,
+	.qwSignature = "MSFT100",
+	.bMS_VendorCode = 0x04,
+	.bPad = 0x00
+};
+
 
 // This table defines which descriptor data is sent for each specific
 // request from the host (in wValue and wIndex).
@@ -303,7 +324,8 @@ const static struct descriptor_list_struct {
 	{0x00000300, (const uint8_t *)&string0, 4},
 	{0x04090301, (const uint8_t *)&string1, sizeof(STR_MANUFACTURER)},
 	{0x04090302, (const uint8_t *)&string2, sizeof(STR_PRODUCT)},	
-	{0x04090303, (const uint8_t *)&string3, 34}
+	{0x04090303, (const uint8_t *)&string3, 34},
+	{0x040900ee, (const uint8_t *)&msft_desc, sizeof(msft_desc)},
 };
 #define DESCRIPTOR_LIST_ENTRIES ((sizeof(descriptor_list))/(sizeof(struct descriptor_list_struct)) )
 
