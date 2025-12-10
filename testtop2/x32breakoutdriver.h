@@ -39,10 +39,10 @@ static int xfertotal = 0;
 static int done_frame = 0;
 static int done_mask = 0;
 static int frame_num;
+static int need_to_rescan_for_usb_devices = 0;
 
 uint32_t LEDs[DEVICES][NR_LEDS_PER_STRAND][STRANDS];
 int configured[DEVICES];
-
 
 ////////////////////////////////////////////////////////////////////////
 // USB Callback
@@ -137,6 +137,16 @@ void DeviceArrive( struct libusb_device *dev )
 		return;
 	}
 
+	int n;
+	for( n = 0; n < DEVICES; n++ )
+	{
+		// Already found.
+		if( devList[n] == dev )
+		{
+			continue;
+		}
+	}
+
 	int err = libusb_open(dev, &thandle);
 	if( err )
 	{
@@ -149,15 +159,13 @@ void DeviceArrive( struct libusb_device *dev )
 	fprintf( stderr, "Adding\n" );
 	if( thandle )
 	{
-		int retry = 100;
 		fprintf( stderr, "Getting serial from ID %d\n", desc.iSerialNumber );
-do_try_again:
+
 		int serv = libusb_get_string_descriptor_ascii( thandle, desc.iSerialNumber, sserial, 63 );
 		if( serv >= 0 )
 		{
 			sserial[63] = '\0';
 			fprintf( stderr, "Found serial: %s ", sserial );
-			int n;
 			for( n = 0; n < DEVICES; n++ )
 			{
 				if( strcmp( serials[n], (const char*)sserial ) == 0 )
@@ -176,11 +184,6 @@ do_try_again:
 		}
 		else
 		{
-			if( retry-- )
-			{
-				usleep(5000);
-				goto do_try_again;
-			}
 			fprintf( stderr, "no serial ID found (serv = %d)\n", serv );
 		}
 	}
@@ -207,7 +210,6 @@ do_try_again:
 		return;
 	}
 
-	int n;
 	for( n = 0; n < TRANSFERS; n++ )
 	{
 		struct libusb_transfer * t = transfers[device][n] = libusb_alloc_transfer( 0 );
@@ -230,6 +232,9 @@ void DeviceDepart( struct libusb_device *dev )
 	{
 		if( devList[device] == dev || dev == 0 )
 		{
+			done_mask &= ~(1<<device);
+			done_frame &= ~(1<<device);
+
 			fprintf( stderr, "Removing %d\n", device );
 			int n;
 			for( n = 0; n < TRANSFERS; n++ )
@@ -248,6 +253,23 @@ void DeviceDepart( struct libusb_device *dev )
 		}
 	}
 }
+
+void RescanForDevices()
+{
+	struct libusb_device **devs;
+	int cnt = libusb_get_device_list(ctx, &devs);
+	if (cnt < 0)
+	{
+		fprintf( stderr, "Device enuemration issue.\n" );
+		return;
+	}
+	for ( int c = 0; c < cnt; c++ )
+	{
+		DeviceArrive( devs[c] );
+	}
+	libusb_free_device_list(devs, 1);
+	need_to_rescan_for_usb_devices = 0;
+}
  
 int hotplug_callback(struct libusb_context *ctx, struct libusb_device *dev, libusb_hotplug_event event, void *user_data)
 {
@@ -257,7 +279,7 @@ int hotplug_callback(struct libusb_context *ctx, struct libusb_device *dev, libu
 
 	if (LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED == event)
 	{
-		DeviceArrive( dev );
+		need_to_rescan_for_usb_devices = 1;
 	}
 	else if (LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT == event)
 	{
@@ -274,6 +296,10 @@ int hotplug_callback(struct libusb_context *ctx, struct libusb_device *dev, libu
 
 void TickBreakoutDriver()
 {
+	if( need_to_rescan_for_usb_devices )
+	{
+		RescanForDevices();
+	}
 	libusb_handle_events(ctx);
 }
 
@@ -281,6 +307,8 @@ int SetupBreakoutDriver()
 {
 	libusb_init(&ctx);
 	libusb_set_option(ctx, LIBUSB_OPTION_LOG_LEVEL, 0);
+
+	need_to_rescan_for_usb_devices = 1;
 
 	int rc = libusb_hotplug_register_callback(NULL, LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED |
 		LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT, 0, USB_VENDOR_ID, USB_PRODUCT_ID,
@@ -292,18 +320,6 @@ int SetupBreakoutDriver()
 		return -1;
 	}
 
-	struct libusb_device **devs;
-	int cnt = libusb_get_device_list(ctx, &devs);
-	if (cnt < 0)
-	{
-		fprintf( stderr, "Device enuemration issue.\n" );
-		return -1;
-	}
-	for ( int c = 0; c < cnt; c++ )
-	{
-		DeviceArrive( devs[c] );
-	}
-	libusb_free_device_list(devs, 1);
 	return 0;
 }
 
