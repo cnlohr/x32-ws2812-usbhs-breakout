@@ -146,10 +146,14 @@ void DeviceArrive( struct libusb_device *dev )
 
 	int captured = 0;
 	int device = 0;
-
+	fprintf( stderr, "Adding\n" );
 	if( thandle )
 	{
-		if( libusb_get_string_descriptor_ascii( thandle, desc.iSerialNumber, sserial, 63 ) >= 0 )
+		int retry = 100;
+		fprintf( stderr, "Getting serial from ID %d\n", desc.iSerialNumber );
+do_try_again:
+		int serv = libusb_get_string_descriptor_ascii( thandle, desc.iSerialNumber, sserial, 63 );
+		if( serv >= 0 )
 		{
 			sserial[63] = '\0';
 			fprintf( stderr, "Found serial: %s ", sserial );
@@ -170,9 +174,19 @@ void DeviceArrive( struct libusb_device *dev )
 				fprintf( stderr, "skipped\n" );
 			}
 		}
+		else
+		{
+			if( retry-- )
+			{
+				usleep(5000);
+				goto do_try_again;
+			}
+			fprintf( stderr, "no serial ID found (serv = %d)\n", serv );
+		}
 	}
 	if( !captured )
 	{
+		fprintf( stderr, "No device match\n" );
 		libusb_close(thandle);
 		return;
 	}
@@ -202,7 +216,7 @@ void DeviceArrive( struct libusb_device *dev )
 		t->length = USBCallbackFill( t->buffer, device );
 		libusb_submit_transfer( t );
 	}
-	printf( "Adding Device %d\n", device );
+	fprintf( stderr, "Adding Device %d\n", device );
 	done_mask |= 1<<device;
 	done_frame |= 1<<device;
 	configured[device] = 0;
@@ -216,6 +230,7 @@ void DeviceDepart( struct libusb_device *dev )
 	{
 		if( devList[device] == dev || dev == 0 )
 		{
+			fprintf( stderr, "Removing %d\n", device );
 			int n;
 			for( n = 0; n < TRANSFERS; n++ )
 			{
@@ -250,7 +265,7 @@ int hotplug_callback(struct libusb_context *ctx, struct libusb_device *dev, libu
 	}
 	else
 	{
-		printf("Unhandled event %d\n", event);
+		fprintf(stderr, "Unhandled event %d\n", event);
 	}
 
 	return 0;
