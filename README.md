@@ -1,4 +1,4 @@
-\# 32x parallel WS 2812 Driver with High-Speed USB
+# 32x parallel WS 2812 Driver with High-Speed USB
 
 
 
