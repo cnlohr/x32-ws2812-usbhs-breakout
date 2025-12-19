@@ -423,50 +423,6 @@ int main()
 
 	while(1)
 	{
-		//printf( "%lu %08lx %lu %d %d\n", USBDEBUG0, USBDEBUG1, USBDEBUG2, 0, 0 );
-
-/*
-		// Send data back to PC.
-		if( !( HSUSBCTX.USBHS_Endp_Busy[4] & 1 ) )
-		{
-			USBHS_SendEndpoint( 4, 512, scratchpad );
-		}
-
-
-		int i;
-		for( i = 1; i < 3; i++ )
-		{
-
-			uint32_t * buffer = (uint32_t*)USBHS_GetEPBufferIfAvailable( i );
-			if( buffer )
-			{
-				int tickDown = ((SysTick->CNT)&0x800000);
-				static int wasTickMouse, wasTickKeyboard;
-				if( i == 1 )
-				{
-					// Keyboard  (only press "8" 3 times)
-					if( tickcount <= 3 && tickDown && !wasTickKeyboard )
-					{
-						buffer[0] = 0x00250000;
-						tickcount++;
-					}
-					else
-					{
-						buffer[0] = 0x00000000;
-					}
-					buffer[1] = 0x00000000;
-					wasTickKeyboard = tickDown;
-				}
-				else
-				{
-					buffer[0] = (tickDown && !wasTickMouse)?0x0010100:0x00000000;
-					wasTickMouse = tickDown;
-				}
-				USBHS_SendEndpoint( i, (i==1)?8:4, 0 );
-			}
-		}
-*/
-
 		__disable_irq();
 		// Critical section.  Todo: Fixme Kinda jank.
 		if( DMA1_Channel3->CNTR == 0 && streaming)
