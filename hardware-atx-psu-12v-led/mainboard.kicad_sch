@@ -6988,14 +6988,15 @@
 			(embedded_fonts no)
 		)
 	)
-	(text "Rev A:\n1. USB to PB\n2. Use PA6/7\n3. Fixed"
+	(text "Rev A:\n1. USB to PB\n2. Use PA6/7 instead of PB6/7\n3. Use correct connector for PCI-E\n\nRev B:\n1. Fix hole sizes for PCI-E"
 		(exclude_from_sim no)
-		(at 157.226 141.224 0)
+		(at 133.096 135.636 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 				(thickness 0.1588)
 			)
+			(justify left top)
 		)
 		(uuid "d5a088fc-6321-4186-b971-fe2fdc4c5095")
 	)
@@ -17779,7 +17780,7 @@
 		(exclude_from_sim no)
 		(in_bom no)
 		(on_board yes)
-		(dnp no)
+		(dnp yes)
 		(fields_autoplaced yes)
 		(uuid "7a40a521-3b31-4811-8e41-b466dbb570fc")
 		(property "Reference" "J3"
@@ -19712,7 +19713,7 @@
 		(exclude_from_sim no)
 		(in_bom no)
 		(on_board yes)
-		(dnp no)
+		(dnp yes)
 		(fields_autoplaced yes)
 		(uuid "97ea28c9-37f3-4913-adb2-11c66227689e")
 		(property "Reference" "J8"
@@ -23454,7 +23455,7 @@
 		(exclude_from_sim no)
 		(in_bom no)
 		(on_board yes)
-		(dnp no)
+		(dnp yes)
 		(fields_autoplaced yes)
 		(uuid "d324f3c0-92a4-4dd2-ac75-e9c890f4eb62")
 		(property "Reference" "J4"
