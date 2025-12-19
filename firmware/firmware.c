@@ -291,8 +291,8 @@ int main()
 	GPIOC->CFGLR = 0x11111111; // All output.  All 10MHz
 	GPIOC->CFGHR = 0x11111111; // All output.  All 10MHz
 
-	GPIOB->CFGLR = 0x11111111; // All output.  All 10MHz
-	GPIOB->CFGHR = 0xbb111111; // All output.  All 10MHz  (Except for USB pins, PB6, PB7)
+	GPIOB->CFGHR = 0x11111111; // All output.  All 10MHz
+	GPIOB->CFGLR = 0xbb111111; // All output.  All 10MHz  (Except for USB pins, PB6, PB7)
 
 	// DMA2 = T1CH1
 	DMA1_Channel2->CNTR = 1;
